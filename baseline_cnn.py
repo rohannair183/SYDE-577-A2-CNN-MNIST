@@ -5,7 +5,9 @@ from torch.utils.data import DataLoader
 import torchvision 
 import typing
 import matplotlib.pyplot as plt
+import torch.nn.functional as F  # Functional module, includes activation functions
 from sklearn.metrics import accuracy_score
+import torch.optim as optim  # Optimization module
 
 device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
 print(f"Using {device} device")
@@ -25,7 +27,6 @@ def load_data() -> typing.Tuple[DataLoader, DataLoader]:
 
     # Download the MNIST data and lazily apply the transformation pipeline
     train_data = torchvision.datasets.MNIST('./datafiles/', train=True, download=True, transform=train_transform)
-    print(train_data)
     test_data = torchvision.datasets.MNIST('./datafiles/', train=False, download=True, transform=test_transform)
 
     # Setup data loaders
@@ -77,14 +78,14 @@ def train(model, train_loader, loss_fn, optimizer, epoch=-1):
     all_targets = []
     loss_history = []
 
-    model = model.to(DEVICE)
+    model = model.to(device)
     model.train()  # Set model in training mode
 
     for i, (inputs, targets) in enumerate(train_loader):
         optimizer.zero_grad()
-        inputs = inputs.to(DEVICE)
+        inputs = inputs.to(device)
         outputs = model(inputs)
-        loss = loss_fn(outputs, targets.to(DEVICE))
+        loss = loss_fn(outputs, targets.to(device))
         loss.backward()
         optimizer.step()
 
@@ -125,12 +126,12 @@ def test(model, test_loader, loss_fn, epoch=-1):
     all_predictions = []
     all_targets = []
 
-    model = model.to(DEVICE)
+    model = model.to(device)
     model.eval()  # Set model in evaluation mode
     for i, (inputs, targets) in enumerate(test_loader):
         with torch.no_grad():
-            outputs = model(inputs.to(DEVICE))
-            loss = loss_fn(outputs, targets.to(DEVICE))
+            outputs = model(inputs.to(device))
+            loss = loss_fn(outputs, targets.to(device))
 
             # Track some values to compute statistics
             total_loss += loss.item()
@@ -147,4 +148,67 @@ def test(model, test_loader, loss_fn, epoch=-1):
 
 train_loader, test_loader = load_data()
 
-# visualize_batch(train_loader)
+
+class MultiLayerPerceptron(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.hidden1 = nn.Linear(784, 100)
+        self.hidden2 = nn.Linear(100, 64)
+        self.hidden3 = nn.Linear(64, 32)
+        self.output = nn.Linear(32, 10)
+    
+    def forward(self, x):
+        """
+        Forward pass implementation for the network
+        
+        :param x: torch.Tensor of shape (batch, 1, 28, 28), input images
+
+        :returns: torch.Tensor of shape (batch, 10), output logits
+        """
+        x = torch.flatten(x, 1)  # shape (batch, 28*28)
+        x = F.relu(self.hidden1(x))
+        x = F.relu(self.hidden2(x))
+        x = F.relu(self.hidden3(x))
+        x = self.output(x)
+        return x
+    
+def training_loop(num_epochs: int, learning_rate: float, show_plots: bool = True) -> None:
+    """Runs the training loop for the MLP model."""    
+    torch.manual_seed(0)
+    model_mlp = MultiLayerPerceptron()
+    optimizer = optim.Adam(model_mlp.parameters(), learning_rate)
+    loss_fn = nn.CrossEntropyLoss()
+
+    train_losses = []
+    test_losses = []
+    train_metrics = []
+    test_metrics = []
+
+
+    for epoch in range(num_epochs):
+        train_acc, train_loss = train(model_mlp, train_loader, loss_fn, optimizer, epoch)
+        test_acc, test_loss = test(model_mlp, test_loader, loss_fn, epoch)
+
+        train_losses.append(train_loss)
+        test_losses.append(test_loss)
+        train_metrics.append(train_acc)
+        test_metrics.append(test_acc)
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+    axs[0].plot(train_losses, c="r", label="Train loss")
+    axs[0].plot(test_losses, c="b", label="Test loss")
+    axs[0].legend()
+    axs[1].set_xlabel("Epochs")
+
+    axs[1].plot(train_metrics, "o-", c="r", label="Train accuracy")
+    axs[1].plot(test_metrics, "o-", c="b", label="Test accuracy")
+    axs[1].legend()
+    axs[1].set_xlabel("Epochs")
+
+    plt.show()
+
+    return
+
+if __name__ == "__main__":
+    visualize_batch(train_loader)
+    training_loop(num_epochs=10, learning_rate=0.001, show_plots=True)

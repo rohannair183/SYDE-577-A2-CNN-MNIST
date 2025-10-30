@@ -3,8 +3,8 @@ Trying to achieve more than 99% test accuracy on MNIST using a convolutional net
 
 ## CNN Model Development Tasks
 
-- [ ] Create main training script with CNN architecture
-- [ ] Implement baseline CNN model (Conv layers + Batch Norm + Dropout)
+- [**X**] Create main training script with CNN architecture
+- [**X**] Implement baseline CNN model 
 - [ ] Add data augmentation (rotation, translation, scaling)
 - [ ] Implement training loop with proper validation
 - [ ] Add regularization techniques (dropout, batch norm, weight decay)
